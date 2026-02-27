@@ -9,3 +9,4 @@ requests
 httpx
 motor
 langsmith
+gunicorn
