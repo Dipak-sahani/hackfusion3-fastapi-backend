@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from groq import Groq
+import google.generativeai as genai
 import time
 import shutil
 import langsmith
@@ -29,10 +30,16 @@ if LANGCHAIN_API_KEY:
 
 # Configure Groq API
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-OCR_API_KEY = os.getenv("OCR_API_KEY", "helloworld") # Default or helloworld
 
 if not GROQ_API_KEY:
     print("Warning: GROQ_API_KEY not found in environment variables.")
+
+# Configure Gemini API
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+else:
+    print("Warning: GEMINI_API_KEY not found in environment variables.")
 
 client = None
 if GROQ_API_KEY:
@@ -604,50 +611,42 @@ async def process_prescription(file: UploadFile = File(...), userId: str = Form(
         print(f"[ERROR] Failed to save temp file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"File saving failed: {str(e)}")
 
-    # 2. Call OCR.Space API
-    print(f"[PROCESS] Starting OCR extraction via OCR.Space...")
+    # 2. Call Gemini API for OCR
+    print(f"[PROCESS] Starting OCR extraction via Gemini...")
+    uploaded_file = None
     try:
-        with open(temp_file_path, 'rb') as f:
-            r = requests.post(
-                'https://api.ocr.space/parse/image',
-                files={'file': f},
-                data={'apikey': OCR_API_KEY, 'language': 'eng', 'isOverlayRequired': False},
-                timeout=90
-            )
-        
-        if not r.ok:
-            print(f"[ERROR] OCR API failed with status {r.status_code}")
-            raise Exception(f"OCR Server returned status {r.status_code}: {r.text}")
-
-        try:
-            ocr_result = r.json()
-        except Exception:
-            print(f"[ERROR] OCR Response is not valid JSON")
-            raise Exception(f"Failed to parse OCR response as JSON: {r.text[:200]}")
+        if not GEMINI_API_KEY:
+            raise Exception("GEMINI_API_KEY is missing. Cannot perform OCR.")
             
-        print(f"[DEBUG] OCR Full Response: {ocr_result}")
+        uploaded_file = genai.upload_file(temp_file_path)
+        model = genai.GenerativeModel("gemini-2.5-flash")
         
-        if ocr_result.get("IsErroredOnProcessing"):
-            err_msg = ocr_result.get("ErrorMessage", "OCR Error")
-            print(f"[ERROR] OCR processing error: {err_msg}")
-            raise Exception(err_msg)
+        prompt = "Extract all text from this image exactly as printed/written. If there is no text, return an empty string."
+        response = model.generate_content([prompt, uploaded_file])
         
-        parsed_results = ocr_result.get("ParsedResults", [])
-        if not parsed_results:
-            print(f"[ERROR] No text found in OCR result")
-            raise Exception("No text found in prescription")
-        
-        raw_ocr_text = parsed_results[0].get("ParsedText", "")
+        try:
+            raw_ocr_text = response.text if response.text else ""
+        except ValueError:
+            raw_ocr_text = ""
+            print(f"[ERROR] OCR Response blocked by safety filters.")
+            
         print(f"[PROCESS] OCR Successful. Extracted {len(raw_ocr_text)} characters.")
 
         if len(raw_ocr_text.strip()) < 10:
             print(f"[ERROR] OCR text too short ({len(raw_ocr_text)} chars)")
             raise Exception("The text extracted from the image is too sparse. Please provide a clearer image.")
-        
+            
     except Exception as e:
         if os.path.exists(temp_file_path): os.remove(temp_file_path)
         print(f"[ERROR] OCR Pipeline Failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"OCR Processing failed: {str(e)}")
+    finally:
+        # Clean up the file from Gemini if it was uploaded
+        if uploaded_file:
+            try:
+                genai.delete_file(uploaded_file.name)
+            except:
+                pass
 
     # 3. AI Data Extraction
     print(f"[PROCESS] Starting AI analysis (Llama 3.1)...")
