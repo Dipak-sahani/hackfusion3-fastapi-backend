@@ -7,6 +7,7 @@ import hashlib
 import requests
 import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from groq import Groq
 import time
@@ -39,6 +40,18 @@ if GROQ_API_KEY:
 
 # Initialize FastAPI app
 app = FastAPI(title="Medical Intelligence Service")
+
+# Add CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://hackfusion3-nodejs-backend.onrender.com",
+        "https://hackfusion3-fastapi-backend.onrender.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Startup Log
 print(f"\n[STARTUP] Medical Intelligence Service initializing...")
