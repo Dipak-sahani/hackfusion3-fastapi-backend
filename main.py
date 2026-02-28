@@ -47,11 +47,34 @@ app.add_middleware(
     allow_origins=[
         "https://hackfusion3-nodejs-backend.onrender.com",
         "https://hackfusion3-fastapi-backend.onrender.com",
+        "http://localhost:5173",
+        "http://localhost:5174"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add Request Logging Middleware
+@app.middleware("http")
+async def log_requests(request, call_next):
+    start_time = time.time()
+    path = request.url.path
+    method = request.method
+    
+    print(f"\n[REQUEST] {method} {path} - Processing...")
+    
+    try:
+        response = await call_next(request)
+        process_time = (time.time() - start_time) * 1000
+        formatted_process_time = "{0:.2f}".format(process_time)
+        print(f"[RESPONSE] {method} {path} - Status: {response.status_code} - Time: {formatted_process_time}ms")
+        return response
+    except Exception as e:
+        process_time = (time.time() - start_time) * 1000
+        formatted_process_time = "{0:.2f}".format(process_time)
+        print(f"[ERROR] {method} {path} - Failed: {str(e)} - Time: {formatted_process_time}ms")
+        raise e
 
 # Startup Log
 print(f"\n[STARTUP] Medical Intelligence Service initializing...")
