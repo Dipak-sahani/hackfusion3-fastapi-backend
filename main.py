@@ -40,6 +40,10 @@ if GROQ_API_KEY:
 # Initialize FastAPI app
 app = FastAPI(title="Medical Intelligence Service")
 
+# Startup Log
+print(f"\n[STARTUP] Medical Intelligence Service initializing...")
+print(f"[STARTUP] Detected PORT: {os.getenv('PORT', '8000 (Default)')}")
+
 # Create storage directory for prescriptions
 UPLOAD_DIR = "uploads/prescriptions"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
