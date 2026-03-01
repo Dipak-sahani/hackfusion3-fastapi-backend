@@ -259,10 +259,12 @@ UNIT CONVERSION RULES (When outputting "type": "order"):
 - ALWAYS calculate "quantity_converted" as (quantity * tablets_per_unit). 
 - If unit is "tablet", quantity_converted = quantity.
 
-INPUT CONTEXT SUMMARY:
+🔹 INPUT CONTEXT SUMMARY:
 1. User's latest message.
 2. Chat History (last 10 messages).
-3. Medicine Context (User's current stock, prescription files, and system-injected SAFETY RULES like exact AGE).
+3. Medicine Context (User's current stock, prescription files, system-injected SAFETY RULES like exact AGE, and BIO DATA like Gender/City).
+
+⚠️ CRITICAL: If the "Medicine Context" already contains the user's Age, Gender, or City, do NOT ask the user for them. Assume they are already verified. Only ask if a field is explicitly missing or "Unknown" in the context.
 """
 
 SYSTEM_PROMPT_DIET = """
